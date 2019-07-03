@@ -12,15 +12,15 @@ import time
 import pandas as pd
 import numpy as np
 import re
+from datetime import datetime, date, timedelta
 import scipy as sp
 from scipy import stats
 from bs4 import BeautifulSoup
 
+def isNan(num):
+    return num != num
+
 def get_data(symbols, start, end):
-    start = start.split("/")
-    end = end.split("/")
-    start = datetime.datetime(int(start[0]), int(start[1]), int(start[2]))
-    end = datetime.datetime(int(end[0]), int(end[1]), int(end[2]))
     return yf.download(symbols, start=start, end=end)
 
 def get_symbols(url, tag="a", attr="", fromText=False):
@@ -101,3 +101,13 @@ def get_rank(data_dict, symbols, target_col, measure):
     df_target_col[target_col+" Rank"] = target_rank
     return df_target_col
 
+def get_dates_list(start, end):
+    delta = end - start
+    return [start + timedelta(days=i) for i in range(delta.days + 1)]
+
+def get_date_intersection(list1, list2):
+    return sorted(list(set(list1) & set(list2)))
+
+def get_correlation(data1, data2):
+    date_intersection = get_date_intersection(data1.index.tolist(), data2.index.tolist())
+    return np.corrcoef(data1[date_intersection], data2[date_intersection])[0][1]
