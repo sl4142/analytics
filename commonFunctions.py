@@ -8,7 +8,7 @@ import yfinance as yf
 import datetime
 import requests
 import urllib.request
-import time
+import time, sched
 import pandas as pd
 import numpy as np
 import re
@@ -19,6 +19,12 @@ from bs4 import BeautifulSoup
 
 def isNan(num):
     return num != num
+
+def tsToDtEst(ts):
+    return datetime.utcfromtimestamp(ts)-timedelta(seconds=3600*4)
+    
+def dtToString(dt):
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
 
 def get_data(symbols, start, end):
     return yf.download(symbols, start=start, end=end)
