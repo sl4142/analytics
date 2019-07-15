@@ -1,4 +1,8 @@
 import requests
+import os
+import errno
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 import numpy as np
 import pandas as pd
 import sched, time
@@ -10,6 +14,8 @@ base_url = 'https://www.bitstamp.net/api/v2/ticker_hour/'
 daily_url = 'https://www.bitstamp.net/api/ticker/'
 
 DAY_LIMIT = 24*60
+TWO_HOUR_LIMIT = 60*2
+MINUTE_INTERVAL = 60
 TICKERS = ['btc', 'ltc', 'eth', 'bch', 'xrp']
 currPair = ['btcusd', 'ltcusd', 'ethusd', 'bchusd', 'xrpusd']
 url_hr = 'https://www.bitstamp.net/api/ticker_hour/'
@@ -34,23 +40,43 @@ def initializeDataDict(TICKERS, cols):
         output[ticker] = initializeOneDict(cols)
     return output
 
+#def collectOneData(url):
+#    r = requests.get(url) 
+#    return r.json()
+
 def collectOneData(url):
-    r = requests.get(url) 
+    s = requests.Session()
+    retries = Retry(total=10000,
+                backoff_factor=0.1,
+                status_forcelist=[ 500, 502, 503, 504 ])
+
+    s.mount('http://', HTTPAdapter(max_retries=retries))
+    r = s.get(url)
     return r.json()
 
-def collectAllData(sc, urls, allData, cols, DAY_LIMIT, interval=60):
+def writeFiles(dirName, filename, df):
+    if not os.path.exists(dirName):
+        os.mkdir(dirName)
+    df.to_csv(dirName+filename)
+
+def collectAllData(sc, urls, allData, cols, HOUR_LIMIT, DAY_LIMIT, i=1, interval=60):
     curLimit = 0
     for ticker, url in urls.items():
         curData = collectOneData(url)
         for col in cols:
             allData[ticker][col].append(curData[col])
             curLimit = max(curLimit, len(allData[ticker][col]))
-    if  curLimit % DAY_LIMIT == 0:
+    if  curLimit % HOUR_LIMIT == 0:
         ts = datetime.now().timestamp()
         curDate = datetime.utcfromtimestamp(ts).strftime('%Y%m%d')
         for ticker in urls.keys():
             curDf = pd.DataFrame.from_dict(allData[ticker])
-            curDf.to_csv('data/' + ticker + '/' + ticker + curDate + '.csv')
+            dirName = 'data/' + ticker + '/' + curDate + '/'
+            fileName = ticker + curDate + '_' + str(i) + '.csv'
+            writeFiles(dirName, fileName, curDf)
         allData = initializeDataDict(TICKERS, cols)
-        print(curDate)
-    sc.enter(interval, 1, collectAllData, (sc,urls, allData, cols, DAY_LIMIT, interval))
+        i += 1
+        print(curDate + str(i))
+    if i % (DAY_LIMIT / HOUR_LIMIT) == 0:
+        i = 0
+    sc.enter(interval, 1, collectAllData, (sc,urls, allData, cols, HOUR_LIMIT, DAY_LIMIT, i, interval))
